@@ -1,3 +1,4 @@
+// script.js
 let csvData = '';
 
 document.getElementById('csvFileInput').addEventListener('change', handleFileSelect);
@@ -11,7 +12,7 @@ function handleFileSelect(event) {
 
     reader.onload = function(e) {
       csvData = e.target.result;
-      visualizeData(csvData, document.getElementById('chartType').value);
+      visualizeData(csvData, document.getElementById('chartType').value, document.getElementById('columnSelect').value);
     };
 
     reader.readAsText(file);
@@ -19,10 +20,10 @@ function handleFileSelect(event) {
 }
 
 function updateChart() {
-  visualizeData(csvData, document.getElementById('chartType').value);
+  visualizeData(csvData, document.getElementById('chartType').value, document.getElementById('columnSelect').value);
 }
 
-function visualizeData(csvData, chartType) {
+function visualizeData(csvData, chartType, columnCount) {
   // Parse CSV data
   const data = d3.csvParse(csvData);
 
@@ -46,21 +47,30 @@ function visualizeData(csvData, chartType) {
     .padding(0.1);
 
   const yScale = d3.scaleLinear()
-    .domain([0, d3.max(data, d => +d.y)])
+    .domain([0, d3.max(data, d => +d3.max(Object.values(d).slice(1)))])
     .range([height, 0]);
+
+  // Create color scale
+  const colorScale = d3.scaleOrdinal(d3.schemeCategory10);
 
   // Create chart based on user selection
   if (chartType === 'bar') {
     // Create bars
-    svg.selectAll('rect')
+    svg.selectAll('.barGroup')
       .data(data)
       .enter()
+      .append('g')
+      .attr('class', 'barGroup')
+      .attr('transform', d => `translate(${xScale(d.x)}, 0)`)
+      .selectAll('rect')
+      .data(d => Object.entries(d).slice(1))
+      .enter()
       .append('rect')
-      .attr('x', d => xScale(d.x))
-      .attr('y', d => yScale(+d.y))
-      .attr('width', xScale.bandwidth())
-      .attr('height', d => height - yScale(+d.y))
-      .attr('fill', 'blue');
+      .attr('x', d => xScale.bandwidth() / Object.entries(data[0]).length * parseInt(d[0]))
+      .attr('y', d => yScale(+d[1]))
+      .attr('width', xScale.bandwidth() / Object.entries(data[0]).length)
+      .attr('height', d => height - yScale(+d[1]))
+      .attr('fill', (d, i) => colorScale(i));
   } else if (chartType === 'line') {
     // Create line
     const line = d3.line()
@@ -93,7 +103,7 @@ function visualizeData(csvData, chartType) {
     const thead = table.append('thead');
     thead.append('tr')
       .selectAll('th')
-      .data(data.columns)
+      .data(data.columns.slice(0, columnCount > 0 ? columnCount : data.columns.length))
       .enter()
       .append('th')
       .text(d => d)
@@ -110,7 +120,7 @@ function visualizeData(csvData, chartType) {
 
     // Add cells
     const cells = rows.selectAll('td')
-      .data(d => Object.values(d))
+      .data(d => Object.values(d).slice(0, columnCount > 0 ? columnCount : Object.values(d).length))
       .enter()
       .append('td')
       .text(d => d)
